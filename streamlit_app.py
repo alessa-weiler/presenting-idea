@@ -1,14 +1,12 @@
+
 import streamlit as st
 import pandas as pd
-import networkx as nx
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.colors import Normalize
 import numpy as np
 
-st.set_page_config(page_title="Conversation Network Analysis", layout="wide")
+st.set_page_config(page_title="Conversation Analysis - Bubble Chart", layout="wide")
 
-st.title("Conversation Network Analysis")
+st.title("Conversation Analysis - Bubble Chart")
 
 # Function to load data
 @st.cache_data
