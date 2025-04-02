@@ -52,7 +52,7 @@ df['bubble_size'] = (df['sentiment'] + df['similarity']) / 2
 min_size, max_size = 100, 1000  # Min and max bubble sizes
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["Bubble Chart", "Data Table", "Summary View"])
+tab1, tab2 = st.tabs(["Bubble Chart", "Summary View"])
 
 with tab1:
     st.header("Bubble Chart Visualization")
@@ -176,26 +176,6 @@ with tab1:
     """)
 
 with tab2:
-    st.header("Conversation Data")
-    
-    # Sort by overall score (descending)
-    sorted_df = df.copy()
-    sorted_df['overall_score'] = (sorted_df['sentiment'] + sorted_df['similarity']) / 2
-    sorted_df = sorted_df.sort_values('overall_score', ascending=False)
-    
-    # Display the table with metrics and ranking
-    st.dataframe(
-        sorted_df[['person2', 'sentiment', 'similarity', 'overall_score']].reset_index(drop=True),
-        use_container_width=True,
-        column_config={
-            "person2": "Person",
-            "sentiment": st.column_config.NumberColumn("Sentiment", format="%d/100"),
-            "similarity": st.column_config.NumberColumn("Similarity", format="%d/100"),
-            "overall_score": st.column_config.NumberColumn("Overall Score", format="%.1f")
-        }
-    )
-
-with tab3:
     st.header("Detailed Conversation Summaries")
     
     # Get person with highest score for highlight
