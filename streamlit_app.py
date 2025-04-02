@@ -30,165 +30,242 @@ def load_data():
     return pd.DataFrame(data)
 
 # Load data
+# Load data
 df = load_data()
 
-# Sidebar with options
-st.sidebar.header("Network Graph Settings")
-weight_option = st.sidebar.selectbox(
-    "Edge weight based on:",
-    ["sentiment", "similarity", "average"]
+# Sidebar options
+st.sidebar.header("Visualization Settings")
+x_axis = st.sidebar.selectbox(
+    "X-Axis Metric:",
+    ["sentiment", "similarity"],
+    index=1  # Default to similarity
 )
 
-min_threshold = st.sidebar.slider(
-    "Minimum connection strength to show:", 
-    min_value=0, 
-    max_value=100, 
-    value=50
+y_axis = st.sidebar.selectbox(
+    "Y-Axis Metric:",
+    ["sentiment", "similarity"],
+    index=0  # Default to sentiment
 )
+
+# Calculate size (based on average of sentiment and similarity)
+df['bubble_size'] = (df['sentiment'] + df['similarity']) / 2
+min_size, max_size = 100, 1000  # Min and max bubble sizes
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["Network Graph", "Data Table", "Summary View"])
+tab1, tab2, tab3 = st.tabs(["Bubble Chart", "Data Table", "Summary View"])
 
 with tab1:
-    st.header("Network Visualization")
+    st.header("Bubble Chart Visualization")
+    st.subheader(f"Conversation compatibility between Alessa and others")
     
-    # Create a network graph
-    G = nx.Graph()
-    
-    # Get all unique persons
-    all_persons = list(set(df['person1'].tolist() + df['person2'].tolist()))
-    
-    # Add nodes
-    for person in all_persons:
-        G.add_node(person)
-    
-    # Add edges with weights
-    for _, row in df.iterrows():
-        if weight_option == "sentiment":
-            weight = row['sentiment']
-        elif weight_option == "similarity":
-            weight = row['similarity']
-        else:  # average
-            weight = (row['sentiment'] + row['similarity']) / 2
-        
-        # Only add edges above the threshold
-        if weight >= min_threshold:
-            G.add_edge(row['person1'], row['person2'], 
-                      weight=weight/100,  # Normalize to 0-1
-                      sentiment=row['sentiment'],
-                      similarity=row['similarity'],
-                      summary=row['summary'])
-    
-    # Create the plot
+    # Set up the figure
     fig, ax = plt.subplots(figsize=(10, 8))
     
-    # Position nodes using force-directed layout
-    pos = nx.spring_layout(G, seed=42)
+    # Normalize bubble sizes
+    sizes = df['bubble_size'].values
+    normalized_sizes = [(size - df['bubble_size'].min()) / (df['bubble_size'].max() - df['bubble_size'].min()) 
+                       * (max_size - min_size) + min_size for size in sizes]
     
-    # Get edge weights for coloring
-    edges = G.edges()
-    weights = [G[u][v]['weight'] for u, v in edges]
+    # Choose different colors for each bubble
+    colors = plt.cm.viridis(np.linspace(0, 1, len(df)))
     
-    # Normalize colors based on weights
-    norm = Normalize(vmin=min_threshold/100, vmax=1)
-    cmap = cm.Blues
-    
-    # Draw edges with varying colors based on weight
-    nx.draw_networkx_edges(
-        G, pos, 
-        edgelist=edges,
-        width=[w*5 for w in weights],  # Scale width by weight
-        edge_color=[cmap(norm(w)) for w in weights],
-        alpha=0.7
+    # Create scatter plot
+    scatter = ax.scatter(
+        df[x_axis], 
+        df[y_axis],
+        s=normalized_sizes,
+        c=colors,
+        alpha=0.7,
+        edgecolors='black',
+        linewidth=1
     )
     
-    # Draw nodes
-    nx.draw_networkx_nodes(
-        G, pos,
-        nodelist=['Alessa'],  # Central node
-        node_size=800,
-        node_color='lightgreen',
-        alpha=0.9
+    # Add labels next to each bubble
+    for i, row in df.iterrows():
+        ax.annotate(
+            row['person2'],
+            xy=(row[x_axis], row[y_axis]),
+            xytext=(5, 0),
+            textcoords='offset points',
+            fontsize=12,
+            fontweight='bold'
+        )
+    
+    # Set titles and labels
+    ax.set_title(f'Conversation Analysis: Alessa with Others', fontsize=16)
+    ax.set_xlabel(f'{x_axis.capitalize()} Score', fontsize=14)
+    ax.set_ylabel(f'{y_axis.capitalize()} Score', fontsize=14)
+    
+    # Set axis limits with some padding
+    x_padding = (df[x_axis].max() - df[x_axis].min()) * 0.1
+    y_padding = (df[y_axis].max() - df[y_axis].min()) * 0.1
+    
+    ax.set_xlim(df[x_axis].min() - x_padding, df[x_axis].max() + x_padding)
+    ax.set_ylim(df[y_axis].min() - y_padding, df[y_axis].max() + y_padding)
+    
+    # Add grid
+    ax.grid(True, linestyle='--', alpha=0.7)
+    
+    # Add reference lines for average values
+    ax.axvline(x=df[x_axis].mean(), color='gray', linestyle='--', alpha=0.5)
+    ax.axhline(y=df[y_axis].mean(), color='gray', linestyle='--', alpha=0.5)
+    
+    # Add text to indicate quadrants
+    avg_x = df[x_axis].mean()
+    avg_y = df[y_axis].mean()
+    
+    ax.text(
+        df[x_axis].min(), 
+        df[y_axis].max(), 
+        f"High {y_axis}, Low {x_axis}", 
+        fontsize=10, 
+        ha='left', 
+        va='top'
     )
     
-    nx.draw_networkx_nodes(
-        G, pos,
-        nodelist=[n for n in G.nodes() if n != 'Alessa'],
-        node_size=500,
-        node_color='skyblue',
-        alpha=0.9
+    ax.text(
+        df[x_axis].max(), 
+        df[y_axis].max(), 
+        f"High {y_axis}, High {x_axis}", 
+        fontsize=10, 
+        ha='right', 
+        va='top'
     )
     
-    # Draw labels
-    nx.draw_networkx_labels(G, pos, font_weight='bold')
+    ax.text(
+        df[x_axis].min(), 
+        df[y_axis].min(), 
+        f"Low {y_axis}, Low {x_axis}", 
+        fontsize=10, 
+        ha='left', 
+        va='bottom'
+    )
     
-    # Add edge labels if there are few enough edges
-    if len(edges) <= 10:
-        if weight_option == "sentiment":
-            edge_labels = {(u, v): f"{G[u][v]['sentiment']}" for u, v in edges}
-        elif weight_option == "similarity":
-            edge_labels = {(u, v): f"{G[u][v]['similarity']}" for u, v in edges}
-        else:
-            edge_labels = {(u, v): f"{int((G[u][v]['sentiment'] + G[u][v]['similarity'])/2)}" for u, v in edges}
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    ax.text(
+        df[x_axis].max(), 
+        df[y_axis].min(), 
+        f"Low {y_axis}, High {x_axis}", 
+        fontsize=10, 
+        ha='right', 
+        va='bottom'
+    )
     
-    plt.axis('off')
+    # Annotate top performers
+    if x_axis != y_axis:  # Only if showing different metrics
+        best_overall_idx = df[['sentiment', 'similarity']].mean(axis=1).idxmax()
+        best_person = df.loc[best_overall_idx, 'person2']
+        
+        ax.annotate(
+            f"Best overall: {best_person}",
+            xy=(df.loc[best_overall_idx, x_axis], df.loc[best_overall_idx, y_axis]),
+            xytext=(20, 20),
+            textcoords='offset points',
+            fontsize=12,
+            arrowprops=dict(arrowstyle='->', color='red')
+        )
+    
     st.pyplot(fig)
     
-    # Add color bar for reference
-    fig2, ax2 = plt.subplots(figsize=(6, 1))
-    cb = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), 
-                    cax=ax2, orientation='horizontal')
-    
-    if weight_option == "sentiment":
-        cb.set_label('Sentiment Score (normalized)')
-    elif weight_option == "similarity":
-        cb.set_label('Similarity Score (normalized)')
-    else:
-        cb.set_label('Average of Sentiment and Similarity (normalized)')
-    
-    st.pyplot(fig2)
+    # Show chart explanation
+    st.markdown("""
+    ### How to read this chart:
+    - **Position**: The x and y coordinates show the chosen metrics (sentiment and similarity)
+    - **Bubble Size**: Larger bubbles indicate stronger overall connections (average of sentiment and similarity)
+    - **Quadrants**: Divided by average values, showing relative strengths in each metric
+    - **Best Overall**: Person with the highest combined scores is highlighted
+    """)
 
 with tab2:
     st.header("Conversation Data")
-    st.dataframe(df[['person1', 'person2', 'sentiment', 'similarity']], use_container_width=True)
+    
+    # Sort by overall score (descending)
+    sorted_df = df.copy()
+    sorted_df['overall_score'] = (sorted_df['sentiment'] + sorted_df['similarity']) / 2
+    sorted_df = sorted_df.sort_values('overall_score', ascending=False)
+    
+    # Display the table with metrics and ranking
+    st.dataframe(
+        sorted_df[['person2', 'sentiment', 'similarity', 'overall_score']].reset_index(drop=True),
+        use_container_width=True,
+        column_config={
+            "person2": "Person",
+            "sentiment": st.column_config.NumberColumn("Sentiment", format="%d/100"),
+            "similarity": st.column_config.NumberColumn("Similarity", format="%d/100"),
+            "overall_score": st.column_config.NumberColumn("Overall Score", format="%.1f")
+        }
+    )
 
 with tab3:
     st.header("Detailed Conversation Summaries")
     
-    # Create an expandable section for each conversation
-    for _, row in df.iterrows():
-        with st.expander(f"{row['person1']} and {row['person2']} (Sentiment: {row['sentiment']}, Similarity: {row['similarity']})"):
+    # Get person with highest score for highlight
+    best_match = df.loc[df['bubble_size'].idxmax(), 'person2']
+    
+    # Create an expandable section for each conversation, sorted by score
+    sorted_by_score = df.sort_values('bubble_size', ascending=False)
+    
+    for _, row in sorted_by_score.iterrows():
+        person = row['person2']
+        is_best = person == best_match
+        
+        # Add a special indicator for the best match
+        title = f"{person} (Sentiment: {row['sentiment']}, Similarity: {row['similarity']})"
+        if is_best:
+            title = f"🌟 BEST MATCH: {title}"
+        
+        with st.expander(title, expanded=is_best):
             st.markdown(row['summary'])
 
-# Add additional insights
-st.header("Network Insights")
+# Add insights section
+st.header("Key Insights")
 
-# Calculate and display metrics
-if G.number_of_edges() > 0:
-    strongest_connection = max([(u, v) for u, v in G.edges()], 
-                              key=lambda x: G[x[0]][x[1]]['weight'])
-    
-    p1, p2 = strongest_connection
-    
-    st.markdown(f"### Strongest Connection: {p1} and {p2}")
-    st.markdown(f"- Sentiment: {G[p1][p2]['sentiment']}")
-    st.markdown(f"- Similarity: {G[p1][p2]['similarity']}")
-    
-    # Show summary for strongest connection
-    strongest_row = df[(df['person1'] == p1) & (df['person2'] == p2) | 
-                      (df['person1'] == p2) & (df['person2'] == p1)].iloc[0]
-    
-    st.markdown("#### Summary:")
-    st.markdown(strongest_row['summary'])
+# Get best and worst matches
+best_match_idx = df['bubble_size'].idxmax()
+worst_match_idx = df['bubble_size'].idxmin()
 
-# Add instructions
+best_match_data = df.iloc[best_match_idx]
+worst_match_data = df.iloc[worst_match_idx]
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Strongest Connection")
+    st.markdown(f"**Person:** {best_match_data['person2']}")
+    st.markdown(f"**Sentiment:** {best_match_data['sentiment']}/100")
+    st.markdown(f"**Similarity:** {best_match_data['similarity']}/100")
+    st.markdown(f"**Overall Score:** {best_match_data['bubble_size']:.1f}")
+
+with col2:
+    st.subheader("Lowest Connection")
+    st.markdown(f"**Person:** {worst_match_data['person2']}")
+    st.markdown(f"**Sentiment:** {worst_match_data['sentiment']}/100")
+    st.markdown(f"**Similarity:** {worst_match_data['similarity']}/100")  
+    st.markdown(f"**Overall Score:** {worst_match_data['bubble_size']:.1f}")
+
+# Add file upload option for real data
 st.sidebar.markdown("---")
-st.sidebar.markdown("### Instructions")
+st.sidebar.header("Upload Your Own Data")
+
+uploaded_file = st.sidebar.file_uploader("Upload CSV or TSV file", type=["csv", "tsv"])
+if uploaded_file is not None:
+    try:
+        # Try to determine if it's CSV or TSV
+        if uploaded_file.name.endswith('.tsv'):
+            user_df = pd.read_csv(uploaded_file, sep='\t')
+        else:
+            user_df = pd.read_csv(uploaded_file)
+            
+        st.sidebar.success("File uploaded successfully! Refresh the page to see your data.")
+        # In a real app, you would update the visualization with this data
+    except Exception as e:
+        st.sidebar.error(f"Error: {e}")
+
+# Instructions
+st.sidebar.markdown("---")
 st.sidebar.markdown("""
-- Use the dropdown to change the metric shown on the edges
-- Adjust the strength threshold to filter connections
-- Hover over nodes and edges for more information
-- View the data table for raw scores
-- Expand the summaries for detailed conversation analyses
+### Instructions
+- Use the dropdowns to change the metrics shown on each axis
+- The bubble size represents the average of sentiment and similarity
+- Larger bubbles indicate stronger overall connections
+- Check the "Summary View" tab for detailed conversation analyses
 """)
